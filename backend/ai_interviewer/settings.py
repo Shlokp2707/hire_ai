@@ -75,20 +75,21 @@ TEMPLATES = [
 WSGI_APPLICATION = "ai_interviewer.wsgi.application"
 
 # DATABASES Configuration: DATABASE_URL, PostgreSQL, or SQLite fallback
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 USE_SQLITE = os.getenv("USE_SQLITE", "False").lower() in ("true", "1", "yes")
-DATABASE_URL = os.getenv("DATABASE_URL")
 
-if DATABASE_URL:
+if DATABASE_URL and not USE_SQLITE:
     try:
         import dj_database_url
-        DATABASES = {
-            "default": dj_database_url.config(
-                default=DATABASE_URL,
-                conn_max_age=600,
-                conn_health_checks=True,
-            )
-        }
-    except ImportError:
+        parsed_db = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+        if parsed_db:
+            if not parsed_db.get("NAME"):
+                parsed_db["NAME"] = "postgres"
+            DATABASES = {"default": parsed_db}
+        else:
+            raise ValueError("Invalid DATABASE_URL format")
+    except Exception as e:
+        print(f"Warning: Failed to parse DATABASE_URL ({e}), falling back to SQLite")
         DATABASES = {
             "default": {
                 "ENGINE": "django.db.backends.sqlite3",
@@ -99,7 +100,7 @@ elif not USE_SQLITE and os.getenv("DB_HOST"):
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.postgresql").strip("\"'").strip(),
-            "NAME": os.getenv("DB_NAME", "postgres").strip("\"'").strip(),
+            "NAME": os.getenv("DB_NAME", "postgres").strip("\"'").strip() or "postgres",
             "USER": os.getenv("DB_USER", "postgres").strip("\"'").strip(),
             "PASSWORD": os.getenv("DB_PASSWORD", "").strip("\"'").strip(),
             "HOST": os.getenv("DB_HOST", "").strip("\"'").strip(),
