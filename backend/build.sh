@@ -2,12 +2,14 @@
 # Exit on error
 set -o errexit
 
-# Install dependencies
+echo "==> Upgrading pip..."
 pip install --upgrade pip
+
+echo "==> Installing backend dependencies..."
 pip install -r requirements.txt
 
-# Collect static files for WhiteNoise
-python manage.py collectstatic --no-input
+echo "==> Collecting static files..."
+python manage.py collectstatic --noinput
 
-# Run database migrations
+echo "==> Applying database migrations..."
 python manage.py migrate

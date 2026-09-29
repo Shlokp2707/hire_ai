@@ -17,9 +17,17 @@ except ImportError:
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", os.getenv("SECRET_KEY", "django-insecure-change-me"))
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+
+# Allowed Hosts configuration for Render and local development
+allowed_hosts_raw = os.getenv("ALLOWED_HOSTS", "*")
+ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_raw.split(",") if h.strip()]
+if ".onrender.com" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.extend([".onrender.com", "localhost", "127.0.0.1"])
+
+# Trust proxy SSL header when hosted on Render
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
     "daphne",   
@@ -47,7 +55,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
 ROOT_URLCONF = "ai_interviewer.urls"
 
 TEMPLATES = [
@@ -67,10 +74,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "ai_interviewer.wsgi.application"
 
-# DATABASES Configuration with Supabase PostgreSQL & SQLite fallback
+# DATABASES Configuration: DATABASE_URL, PostgreSQL, or SQLite fallback
 USE_SQLITE = os.getenv("USE_SQLITE", "False").lower() in ("true", "1", "yes")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not USE_SQLITE and os.getenv("DB_HOST"):
+if DATABASE_URL:
+    try:
+        import dj_database_url
+        DATABASES = {
+            "default": dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=600,
+                conn_health_checks=True,
+            )
+        }
+    except ImportError:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
+        }
+elif not USE_SQLITE and os.getenv("DB_HOST"):
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.postgresql").strip("\"'").strip(),
@@ -92,18 +117,30 @@ else:
 # Channels
 ASGI_APPLICATION = "ai_interviewer.asgi.application"
 
-# Use in-memory channel layer for development (no Redis needed)
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
+# Channel Layer: In-memory (or Redis if REDIS_URL configured)
+REDIS_URL = os.getenv("REDIS_URL")
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
+        }
     }
-}
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        }
+    }
+
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 MEDIA_URL  = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-
 
 SESSION_ENGINE     = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 86400
@@ -122,7 +159,6 @@ EMAIL_HOST_USER     = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 
 ATS_PASS_THRESHOLD = float(os.getenv("ATS_PASS_THRESHOLD", "40.0"))
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",") + [".onrender.com", "localhost", "127.0.0.1"]
 
 LOGIN_URL = "/login/"
 
@@ -138,11 +174,22 @@ REST_FRAMEWORK = {
 
 # CORS Settings
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() in ("true", "1", "yes")
+
+cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if cors_origins_env:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+csrf_origins_env = os.getenv("CSRF_TRUSTED_ORIGINS", "")
+if csrf_origins_env:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins_env.split(",") if origin.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
