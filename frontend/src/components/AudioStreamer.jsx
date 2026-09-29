@@ -162,7 +162,7 @@ function AudioStreamer({ applicationId, onTranscriptChange, onFinalTranscript, i
           const fullResult = Array.from(event.results)
             .map(r => r[0].transcript)
             .join(' ');
-            
+
           fullTranscriptRef.current = fullResult;
           onTranscriptChange(fullResult);
         };
@@ -175,7 +175,7 @@ function AudioStreamer({ applicationId, onTranscriptChange, onFinalTranscript, i
           if (shouldStopRecordingRef.current === false && recognitionRef.current) {
             try {
               recognitionRef.current.start();
-            } catch (err) {}
+            } catch (err) { }
           }
         };
 
@@ -216,7 +216,7 @@ function AudioStreamer({ applicationId, onTranscriptChange, onFinalTranscript, i
       recognitionRef.current.onend = null;
       try {
         recognitionRef.current.stop();
-      } catch (e) {}
+      } catch (e) { }
       recognitionRef.current = null;
     }
 
@@ -233,7 +233,7 @@ function AudioStreamer({ applicationId, onTranscriptChange, onFinalTranscript, i
       sourceRef.current = null;
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current.close().catch(() => { });
       audioContextRef.current = null;
     }
 
