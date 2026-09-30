@@ -78,16 +78,33 @@ WSGI_APPLICATION = "ai_interviewer.wsgi.application"
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 USE_SQLITE = os.getenv("USE_SQLITE", "False").lower() in ("true", "1", "yes")
 
+db_host_env = os.getenv("DB_HOST", "").strip("\"'").strip()
+
+def is_valid_db_host(host_str):
+    if not host_str:
+        return False
+    # A purely numeric host (like '2707') is an invalid hostname typo
+    if host_str.isdigit():
+        return False
+    return True
+
 if DATABASE_URL and not USE_SQLITE:
     try:
         import dj_database_url
         parsed_db = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-        if parsed_db:
+        parsed_host = (parsed_db.get("HOST") or "").strip()
+        if parsed_db and parsed_host and is_valid_db_host(parsed_host):
             if not parsed_db.get("NAME"):
                 parsed_db["NAME"] = "postgres"
             DATABASES = {"default": parsed_db}
         else:
-            raise ValueError("Invalid DATABASE_URL format")
+            print(f"Warning: DATABASE_URL host '{parsed_host}' is missing or invalid, falling back to SQLite")
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.sqlite3",
+                    "NAME": BASE_DIR / "db.sqlite3",
+                }
+            }
     except Exception as e:
         print(f"Warning: Failed to parse DATABASE_URL ({e}), falling back to SQLite")
         DATABASES = {
@@ -96,14 +113,14 @@ if DATABASE_URL and not USE_SQLITE:
                 "NAME": BASE_DIR / "db.sqlite3",
             }
         }
-elif not USE_SQLITE and os.getenv("DB_HOST"):
+elif not USE_SQLITE and is_valid_db_host(db_host_env):
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.postgresql").strip("\"'").strip(),
             "NAME": os.getenv("DB_NAME", "postgres").strip("\"'").strip() or "postgres",
             "USER": os.getenv("DB_USER", "postgres").strip("\"'").strip(),
             "PASSWORD": os.getenv("DB_PASSWORD", "").strip("\"'").strip(),
-            "HOST": os.getenv("DB_HOST", "").strip("\"'").strip(),
+            "HOST": db_host_env,
             "PORT": os.getenv("DB_PORT", "5432").strip("\"'").strip(),
         }
     }
@@ -175,22 +192,33 @@ REST_FRAMEWORK = {
 
 # CORS Settings
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() in ("true", "1", "yes")
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True").lower() in ("true", "1", "yes")
 
 cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
 if cors_origins_env:
     CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-else:
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
 
 csrf_origins_env = os.getenv("CSRF_TRUSTED_ORIGINS", "")
 if csrf_origins_env:
     CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins_env.split(",") if origin.strip()]
-else:
-    CSRF_TRUSTED_ORIGINS = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
