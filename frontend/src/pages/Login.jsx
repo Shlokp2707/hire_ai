@@ -95,7 +95,19 @@ function Login() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier: identifier.trim(), channel })
     })
-      .then(res => res.json())
+      .then(async (res) => {
+        const text = await res.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (e) {
+          data = { error: `Server error (${res.status})` };
+        }
+        if (!res.ok) {
+          throw new Error(data.error || `Server error (${res.status})`);
+        }
+        return data;
+      })
       .then(data => {
         if (data.success) {
           setOtpSent(true);
@@ -110,7 +122,7 @@ function Login() {
           setError(data.error || "Could not send verification code. Please try again.");
         }
       })
-      .catch(() => setError("Server error while sending code. Please check your connection."))
+      .catch((err) => setError(err.message || "Server error while sending code. Please check your connection."))
       .finally(() => setLoading(false));
   };
 
